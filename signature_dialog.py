@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QTabWidget, QWidget, QComboBox, QLineEdit, QFormLayout,
     QMessageBox, QFileDialog, QProgressDialog,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSettings
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor
 
 
@@ -96,13 +96,16 @@ class SignWorker(QThread):
         self.contact = contact
 
     def run(self):
-        from keychain_sign import sign_pdf_p12
-        ok, msg = sign_pdf_p12(
-            self.input_path, self.output_path,
-            self.p12_path, self.p12_password,
-            self.reason, self.location, self.contact,
-        )
-        self.done.emit(ok, msg)
+        try:
+            from keychain_sign import sign_pdf_p12
+            ok, msg = sign_pdf_p12(
+                self.input_path, self.output_path,
+                self.p12_path, self.p12_password,
+                self.reason, self.location, self.contact,
+            )
+            self.done.emit(ok, msg)
+        except Exception as e:
+            self.done.emit(False, str(e))
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +122,12 @@ class SignatureDialog(QDialog):
         self.setWindowTitle(T('sig_title'))
         self.setMinimumWidth(540)
         self._stroke = None
+        self._settings = QSettings("mediatoring.com", "PDFReader")
         self._build_ui()
+        # Restore last used P12 path
+        saved_p12 = self._settings.value("sig/p12_path", "")
+        if saved_p12 and os.path.exists(saved_p12):
+            self.p12_path_edit.setText(saved_p12)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -209,11 +217,13 @@ class SignatureDialog(QDialog):
         self.tabs.addTab(tab_cert, T('sig_tab_cert'))
 
     def _browse_p12(self):
+        start_dir = os.path.dirname(self.p12_path_edit.text()) or os.path.expanduser("~")
         path, _ = QFileDialog.getOpenFileName(
-            self, T('sig_open_p12_dlg'), "", T('sig_p12_filter')
+            self, T('sig_open_p12_dlg'), start_dir, T('sig_p12_filter')
         )
         if path:
             self.p12_path_edit.setText(path)
+            self._settings.setValue("sig/p12_path", path)
 
     def _update_output_label(self):
         if self.current_file:
@@ -259,11 +269,18 @@ class SignatureDialog(QDialog):
     def _on_signed(self, ok, msg, output_path, prog):
         prog.close()
         if ok:
+            self._settings.setValue("sig/p12_path", self.p12_path_edit.text())
             QMessageBox.information(self, T('sig_done_title'), T('sig_done_msg', path=output_path))
             self.digital_signed.emit(output_path)
             self.accept()
         else:
-            QMessageBox.critical(self, T('sig_err_sign'), msg)
+            # Friendly message for common pyhanko errors
+            friendly = msg
+            if "get_signature_mechanism_for_digest" in msg or "NoneType" in msg:
+                friendly = ("Certificate or key could not be loaded.\n"
+                            "Check that the P12 password is correct and the file is valid.\n\n"
+                            f"Detail: {msg}")
+            QMessageBox.critical(self, T('sig_err_sign'), friendly)
 
     def get_stroke(self):
         return self._stroke

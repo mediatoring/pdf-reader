@@ -19,7 +19,10 @@ LANG = _detect()
 _STRINGS = {
     'en': {
         # drag header
-        'drag_header':       "↕ Drag to position  ·  Ctrl+Enter = insert  ·  Esc = cancel",
+        'drag_header':        "↕ Drag to position  ·  Ctrl+Enter = insert  ·  Esc = cancel",
+        'drag_header_done':   "✓ Inserted  ·  Drag to move, then Ctrl+Enter  ·  Esc = done",
+        'btn_insert':         "Insert into PDF",
+        'btn_reinsert':       "Move here (reinsert)",
         # toolbar tooltips
         'open':              "Open",
         'save':              "Save",
@@ -103,7 +106,10 @@ _STRINGS = {
     },
     'cs': {
         # drag header
-        'drag_header':       "↕ Přetáhni na místo  ·  Ctrl+Enter = vložit  ·  Esc = zrušit",
+        'drag_header':        "↕ Přetáhni na místo  ·  Ctrl+Enter = vložit  ·  Esc = zrušit",
+        'drag_header_done':   "✓ Vloženo  ·  Přetáhni pro přesun, pak Ctrl+Enter  ·  Esc = hotovo",
+        'btn_insert':         "Vložit do PDF",
+        'btn_reinsert':       "Přesunout sem",
         # toolbar tooltips
         'open':              "Otevřít",
         'save':              "Uložit",

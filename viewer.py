@@ -4,9 +4,9 @@ import copy
 import tempfile
 import fitz
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QToolBar, QFileDialog,
-    QStatusBar, QMessageBox, QColorDialog, QTextEdit, QVBoxLayout,
-    QApplication, QLabel, QRubberBand,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QFileDialog,
+    QStatusBar, QMessageBox, QColorDialog, QTextEdit,
+    QApplication, QLabel, QRubberBand, QPushButton,
 )
 from PyQt6.QtPdf import QPdfDocument
 from PyQt6.QtPdfWidgets import QPdfView
@@ -213,12 +213,13 @@ class _DragHeader(QLabel):
 
 
 class TextPlacementWidget(QWidget):
-    """Floating draggable overlay for inserting new text into the PDF."""
+    """Floating draggable overlay for inserting/repositioning text in the PDF."""
 
     def __init__(self, pos, window, commit_fn=None):
         super().__init__(window)
         self._window = window
         self._commit_fn = commit_fn or window._commit_text_placement
+        self._committed = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -235,21 +236,43 @@ class TextPlacementWidget(QWidget):
         self._edit.installEventFilter(self)
         layout.addWidget(self._edit)
 
+        btn_bar = QWidget(self)
+        btn_bar.setStyleSheet("background:rgba(230,230,190,240);")
+        btn_layout = QHBoxLayout(btn_bar)
+        btn_layout.setContentsMargins(4, 2, 4, 2)
+        self._btn = QPushButton(T('btn_insert'), btn_bar)
+        self._btn.setStyleSheet("font-size:11px;padding:2px 10px;")
+        self._btn.clicked.connect(lambda: self._commit_fn(self))
+        btn_layout.addStretch()
+        btn_layout.addWidget(self._btn)
+        layout.addWidget(btn_bar)
+
         self.setStyleSheet("TextPlacementWidget{border:1.5px solid #888;}")
-        self.resize(300, 110)
+        self.resize(300, 130)
         self.move(pos)
         self.show()
         self.raise_()
         self._edit.setFocus()
-        self._committed = False
 
     def text(self):
         return self._edit.toPlainText()
 
     def text_insert_pos(self):
-        """Top-left of the text area in parent-window coordinates."""
         hdr_h = self._header.sizeHint().height()
         return QPoint(self.pos().x(), self.pos().y() + hdr_h)
+
+    def mark_committed(self):
+        self._committed = True
+        self._header.setText(T('drag_header_done'))
+        self._header.setStyleSheet(
+            "background:#2a7a2a;color:white;padding:3px 6px;font-size:11px;"
+        )
+        self._btn.setText(T('btn_reinsert'))
+
+    def closeEvent(self, event):
+        if self._window._text_overlay is self:
+            self._window._text_overlay = None
+        super().closeEvent(event)
 
     def eventFilter(self, obj, event):
         if obj is self._edit and event.type() == QEvent.Type.KeyPress:
@@ -260,7 +283,6 @@ class TextPlacementWidget(QWidget):
                 if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                     self._commit_fn(self)
                     return True
-                # Enter bez Ctrl = nový řádek (výchozí chování)
         return False
 
 
@@ -763,10 +785,12 @@ class PDFViewerWindow(QMainWindow):
 
     def _commit_text_placement(self, widget):
         text = widget.text().strip()
-        widget.close()
-        self._text_overlay = None
         if not text or not self.fitz_doc:
             return
+
+        # If already committed once, undo that insertion before reinserting
+        if widget._committed:
+            self.undo()
 
         insert_pt = widget.text_insert_pos()
         pv_pos = self.pdf_view.pos()
@@ -783,6 +807,8 @@ class PDFViewerWindow(QMainWindow):
         rgb = (self.draw_color.redF(), self.draw_color.greenF(), self.draw_color.blueF())
         page.insert_text(fitz.Point(pdf_x, pdf_y + 12), text, fontsize=12, color=rgb)
         self._reload_view()
+        widget.mark_committed()
+        widget.raise_()
 
     # ---- Comment / sticky-note annotations --------------------------------
 
@@ -799,10 +825,11 @@ class PDFViewerWindow(QMainWindow):
 
     def _commit_comment(self, widget):
         text = widget.text().strip()
-        widget.close()
-        self._text_overlay = None
         if not text or not self.fitz_doc:
             return
+
+        if widget._committed:
+            self.undo()
 
         insert_pt = widget.text_insert_pos()
         pv_pos = self.pdf_view.pos()
@@ -821,6 +848,8 @@ class PDFViewerWindow(QMainWindow):
         annot.update()
         self._reload_view()
         self.statusBar().showMessage(T('comment_added', n=page_idx + 1))
+        widget.mark_committed()
+        widget.raise_()
 
     # ---- Inline text editing ----------------------------------------------
 
