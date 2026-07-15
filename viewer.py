@@ -4,7 +4,7 @@ import copy
 import tempfile
 import fitz
 
-APP_VERSION = "1.4"
+APP_VERSION = "1.5"
 
 def _find_unicode_font():
     """Return path to a system TTF font that covers Latin Extended (ž, č, š …)."""
