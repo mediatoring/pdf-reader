@@ -483,7 +483,14 @@ class PDFViewerWindow(QMainWindow):
 
     def open_file(self, path):
         try:
-            self.fitz_doc = fitz.open(path)
+            raw = fitz.open(path)
+            # Detach from the on-disk file so all subsequent save(BytesIO) calls
+            # do a full write. Without this, fitz tries incremental save and fails
+            # with "save to original must be incremental" on many real-world PDFs.
+            buf = io.BytesIO()
+            raw.save(buf, garbage=4, deflate=True)
+            raw.close()
+            self.fitz_doc = fitz.open("pdf", buf.getvalue())
             self.current_file = path
             self.undo_stack.clear()
             self.redo_stack.clear()
@@ -556,7 +563,7 @@ class PDFViewerWindow(QMainWindow):
 
     def _push_undo(self, desc=""):
         buf = io.BytesIO()
-        self.fitz_doc.save(buf)
+        self.fitz_doc.save(buf, garbage=4, deflate=True)
         self.undo_stack.append({"bytes": buf.getvalue(), "desc": desc})
         self.redo_stack.clear()
         self._update_undo_state()
@@ -566,7 +573,7 @@ class PDFViewerWindow(QMainWindow):
             return
         # Push current to redo
         buf = io.BytesIO()
-        self.fitz_doc.save(buf)
+        self.fitz_doc.save(buf, garbage=4, deflate=True)
         self.redo_stack.append({"bytes": buf.getvalue()})
         # Restore previous
         state = self.undo_stack.pop()
@@ -579,7 +586,7 @@ class PDFViewerWindow(QMainWindow):
         if not self.redo_stack:
             return
         buf = io.BytesIO()
-        self.fitz_doc.save(buf)
+        self.fitz_doc.save(buf, garbage=4, deflate=True)
         self.undo_stack.append({"bytes": buf.getvalue()})
         state = self.redo_stack.pop()
         self.fitz_doc = fitz.open("pdf", state["bytes"])
