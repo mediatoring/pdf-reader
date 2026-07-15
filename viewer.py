@@ -918,6 +918,12 @@ class PDFViewerWindow(QMainWindow):
             fontsize=info["font_size"],
             color=(0, 0, 0),
         )
+        # apply_redactions() rewrites the content stream, which breaks incremental save.
+        # Save to bytes and reopen to get a clean document state.
+        buf = io.BytesIO()
+        self.fitz_doc.save(buf, garbage=4, deflate=True, clean=True)
+        self.fitz_doc.close()
+        self.fitz_doc = fitz.open("pdf", buf.getvalue())
         self._reload_view()
 
     # ---- Signature --------------------------------------------------------
