@@ -5,6 +5,29 @@ import tempfile
 import fitz
 
 APP_VERSION = "1.3"
+
+def _find_unicode_font():
+    """Return path to a system TTF font that covers Latin Extended (ž, č, š …)."""
+    for p in (
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/Library/Fonts/Arial.ttf",
+    ):
+        if os.path.exists(p):
+            return p
+    return None
+
+_UNICODE_FONT = _find_unicode_font()
+
+
+def _insert_text(page, point, text, fontsize=12, color=(0, 0, 0)):
+    """insert_text wrapper that uses a Unicode-capable font when available."""
+    kwargs = dict(fontsize=fontsize, color=color)
+    if _UNICODE_FONT:
+        kwargs["fontname"] = "UFont"
+        kwargs["fontfile"] = _UNICODE_FONT
+    page.insert_text(point, text, **kwargs)
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QFileDialog,
     QStatusBar, QMessageBox, QColorDialog, QTextEdit,
@@ -818,7 +841,7 @@ class PDFViewerWindow(QMainWindow):
         self._push_undo(T('undo_add_text'))
         page = self.fitz_doc[page_idx]
         rgb = (self.draw_color.redF(), self.draw_color.greenF(), self.draw_color.blueF())
-        page.insert_text(fitz.Point(pdf_x, pdf_y + 12), text, fontsize=12, color=rgb)
+        _insert_text(page, fitz.Point(pdf_x, pdf_y + 12), text, fontsize=12, color=rgb)
         self._reload_view()
         widget.mark_committed()
         widget.raise_()
@@ -927,11 +950,11 @@ class PDFViewerWindow(QMainWindow):
         # apply_redactions() is intentionally avoided — it fails on PDFs with incremental
         # update chains ("save must be incremental") which are very common in practice.
         page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
-        page.insert_text(
+        _insert_text(
+            page,
             fitz.Point(rect.x0, rect.y0 + info["font_size"]),
             new_text,
             fontsize=info["font_size"],
-            color=(0, 0, 0),
         )
         self._reload_view()
 
