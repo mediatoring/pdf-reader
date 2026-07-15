@@ -343,7 +343,9 @@ class TextEditOverlay(QTextEdit):
 
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
-        if not getattr(self, '_cancelled', False):
+        # Skip if cancelled or already committed (close() inside _commit_text_edit
+        # re-triggers focusOutEvent — the flag prevents a second commit attempt).
+        if not getattr(self, '_cancelled', False) and not getattr(self, '_committed', False):
             QTimer.singleShot(0, lambda: self._window._commit_text_edit(self))
 
 
@@ -936,19 +938,25 @@ class PDFViewerWindow(QMainWindow):
         self._text_overlay = TextEditOverlay(text, geom, self)
 
     def _commit_text_edit(self, overlay):
+        # Guard: close() inside this method re-triggers focusOutEvent which schedules
+        # another commit via QTimer — the flag stops that second call from running.
+        if getattr(overlay, '_committed', False):
+            return
+        overlay._committed = True
+
+        new_text = overlay.toPlainText()   # capture BEFORE close() clears widget state
         info = self._text_edit_info
-        overlay.close()
         self._text_overlay = None
         self._text_edit_info = None
+        overlay.close()
+
         if not info:
             return
-        new_text = overlay.toPlainText()
         self._push_undo(T('undo_edit_text'))
         page = self.fitz_doc[info["page"]]
         rect = fitz.Rect(info["bbox"])
-        # Draw a white rectangle to cover the old text, then insert new text on top.
-        # apply_redactions() is intentionally avoided — it fails on PDFs with incremental
-        # update chains ("save must be incremental") which are very common in practice.
+        # White rectangle covers the old text; new text is appended on top.
+        # (apply_redactions() avoided — fails on PDFs with incremental update chains.)
         page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
         _insert_text(
             page,
