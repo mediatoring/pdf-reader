@@ -910,20 +910,16 @@ class PDFViewerWindow(QMainWindow):
         self._push_undo(T('undo_edit_text'))
         page = self.fitz_doc[info["page"]]
         rect = fitz.Rect(info["bbox"])
-        page.add_redact_annot(rect, fill=(1, 1, 1))
-        page.apply_redactions()
+        # Draw a white rectangle to cover the old text, then insert new text on top.
+        # apply_redactions() is intentionally avoided — it fails on PDFs with incremental
+        # update chains ("save must be incremental") which are very common in practice.
+        page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
         page.insert_text(
             fitz.Point(rect.x0, rect.y0 + info["font_size"]),
             new_text,
             fontsize=info["font_size"],
             color=(0, 0, 0),
         )
-        # apply_redactions() rewrites the content stream, which breaks incremental save.
-        # Save to bytes and reopen to get a clean document state.
-        buf = io.BytesIO()
-        self.fitz_doc.save(buf, garbage=4, deflate=True, clean=True)
-        self.fitz_doc.close()
-        self.fitz_doc = fitz.open("pdf", buf.getvalue())
         self._reload_view()
 
     # ---- Signature --------------------------------------------------------
