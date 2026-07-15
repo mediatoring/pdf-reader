@@ -3,6 +3,8 @@ import os
 import copy
 import tempfile
 import fitz
+
+APP_VERSION = "1.3"
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QToolBar, QFileDialog,
     QStatusBar, QMessageBox, QColorDialog, QTextEdit,
@@ -344,7 +346,7 @@ class PDFViewerWindow(QMainWindow):
         self._rect_sel_start = None
         self._rect_sel_active = False
 
-        self.setWindowTitle("PDF Reader")
+        self.setWindowTitle(f"PDF Reader {APP_VERSION}")
         self.setMinimumSize(960, 720)
         self._build_ui()
         self._build_toolbar()
@@ -486,7 +488,7 @@ class PDFViewerWindow(QMainWindow):
             self.undo_stack.clear()
             self.redo_stack.clear()
             self._update_undo_state()
-            self.setWindowTitle(f"PDF Reader — {os.path.basename(path)}")
+            self.setWindowTitle(f"PDF Reader {APP_VERSION} — {os.path.basename(path)}")
             n = len(self.fitz_doc)
             self.statusBar().showMessage(f"{os.path.basename(path)}  •  {n} {T('pages')}")
             self._reload_view()
