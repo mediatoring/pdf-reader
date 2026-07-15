@@ -308,16 +308,20 @@ class TextEditOverlay(QTextEdit):
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
+            self._cancelled = True
             self.close()
         elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
-                # Shift+Enter = nový řádek v editoru
                 super().keyPressEvent(event)
             else:
-                # Enter = potvrdit změnu
                 self._window._commit_text_edit(self)
         else:
             super().keyPressEvent(event)
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        if not getattr(self, '_cancelled', False):
+            QTimer.singleShot(0, lambda: self._window._commit_text_edit(self))
 
 
 # ---------------------------------------------------------------------------
