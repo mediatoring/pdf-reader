@@ -903,8 +903,8 @@ class PDFViewerWindow(QMainWindow):
             if block.get("type") != 0:
                 continue
             if fitz.Rect(block["bbox"]).contains(clicked):
-                target = block
-                break
+                target = block  # no break: last match wins — edited text is appended
+                                # at end of content stream, so it overrides the original
 
         if target is None:
             return
